@@ -6,7 +6,7 @@ fn main() {
         let mut curr_elf: Vec<u64> = Vec::new();
 
         for line in content.lines() {
-            if line.len() == 0 {
+            if line.is_empty() {
                 elves.push(curr_elf);
                 curr_elf = Vec::new();
             } else {
