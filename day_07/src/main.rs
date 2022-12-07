@@ -9,37 +9,64 @@ fn main() {
         for line in content.lines() {
             if line.starts_with("$ cd") {
                 if line.eq("$ cd ..") {
-                    if let Some(directory_departed) = pwd.pop() {
-                        // println!("$ cd .. <- {}", directory_departed);
-                    }
+                    pwd.pop();
                 } else {
-                    let directory_entered = line.strip_prefix("$ cd ").unwrap();
-                    // println!("$ cd -> {}", directory_entered);
-                    // println!("\t{:?}", pwd);
-                    pwd.push(directory_entered);
+                    directory_flat.entry(pwd.clone()).or_insert(0);
+                    pwd.push(line.strip_prefix("$ cd ").unwrap());
                 }
-            } else if line.ne("$ ls") {
+            } else if line.ne("$ ls") && !line.starts_with("dir") {
                 let file_attributes: Vec<&str> = line.split(" ").collect();
+                let filesize = file_attributes[0].parse::<u64>().unwrap();
 
-                if let Ok(filesize) = file_attributes[0].parse::<u64>() {
-                    // println!("{} {}", filesize, file_attributes[1]);
-                    if let Some(dirsize) = directory_flat.get(&pwd) {
-                        directory_flat.insert(pwd.clone(), dirsize + filesize);
-                    } else {
-                        directory_flat.insert(pwd.clone(), filesize);
-                    }
-                }
+                directory_flat
+                    .entry(pwd.clone())
+                    .and_modify(|dirsize| *dirsize += filesize)
+                    .or_insert(filesize);
             }
         }
 
-        // let mut sum = 0;
+        let pwd = vec!["/"];
+        let mut directory_complete: HashMap<Vec<&str>, u64> = HashMap::new();
 
-        // for (k, v) in directory_complete.iter() {
-        //     if *v <= 100_000 {
-        //         sum += *v;
-        //     }
-        // }
+        let disk = calculate_dir_size(&pwd, &directory_flat, &mut directory_complete);
 
-        // println!("P1 {}", sum);
+        let mut sum = 0;
+
+        for v in directory_complete.values() {
+            if *v <= 100_000 {
+                sum += *v;
+            }
+        }
+
+        println!("P1 {}", sum);
+
+        let mut sizes: Vec<&u64> = directory_complete.values().collect();
+        sizes.sort();
+
+        for v in sizes {
+            if *v + 40_000_000 > disk {
+                println!("P2 {}", *v);
+                break;
+            }
+        }
     }
+}
+
+fn calculate_dir_size<'a>(
+    pwd: &Vec<&'a str>,
+    directory_flat: &HashMap<Vec<&'a str>, u64>,
+    directory_complete: &mut HashMap<Vec<&'a str>, u64>,
+) -> u64 {
+    let mut total = *(directory_flat.get(pwd).unwrap());
+
+    for dir in directory_flat.keys() {
+        if dir.len() == pwd.len() + 1 && dir.starts_with(pwd.as_slice()) {
+            let dsize = calculate_dir_size(dir, directory_flat, directory_complete);
+            total += dsize
+        }
+    }
+
+    directory_complete.insert(pwd.clone(), total);
+
+    total
 }
