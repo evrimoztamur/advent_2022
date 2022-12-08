@@ -1,7 +1,9 @@
-const GRID_SIZE: usize = 99;
+use rayon::prelude::*;
+
+const GRID_SIZE: usize = 10000;
 
 fn main() {
-    if let Ok(content) = std::fs::read_to_string("input.txt") {
+    if let Ok(content) = std::fs::read_to_string("bigboy.txt") {
         let mut trees = Vec::new();
         for line in content.lines() {
             trees.push(line.as_bytes());
@@ -10,24 +12,33 @@ fn main() {
         let trees = trees.concat();
         let trees: Vec<u8> = trees.iter().map(|v| v - '0' as u8).collect();
 
-        let mut visible_trees: u64 = 0;
-        let mut max_score: usize = 0;
+        println!(
+            "P1 {}",
+            (0..GRID_SIZE)
+                .into_par_iter()
+                .map(|x| {
+                    (0..GRID_SIZE)
+                        .into_par_iter()
+                        .map(|y| assess_score(&trees, x, y).1 as u64)
+                        .sum::<u64>()
+                })
+                .sum::<u64>()
+        );
 
-        for x in 0..GRID_SIZE {
-            for y in 0..GRID_SIZE {
-                let (score, visible) = assess_score(&trees, x, y);
-                max_score = max_score.max(score);
-
-                if score == max_score {
-                    println!("{} {} {}", x, y, score);
-                }
-
-                visible_trees += visible as u64;
-            }
-        }
-
-        println!("P1 {}", visible_trees);
-        println!("P2 {}", max_score);
+        println!(
+            "P2 {}",
+            (0..GRID_SIZE)
+                .into_par_iter()
+                .map(|x| {
+                    (0..GRID_SIZE)
+                        .into_par_iter()
+                        .map(|y| assess_score(&trees, x, y).0)
+                        .max()
+                        .unwrap()
+                })
+                .max()
+                .unwrap()
+        );
     }
 }
 
