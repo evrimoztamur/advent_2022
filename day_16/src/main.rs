@@ -1,5 +1,6 @@
+use array_tool::vec::*;
+
 use regex::Regex;
-use std::clone;
 use std::cmp::Ordering;
 use std::collections::{BinaryHeap, HashMap, VecDeque};
 
@@ -26,6 +27,28 @@ impl PartialOrd for State {
     }
 }
 
+#[derive(Clone, Eq, PartialEq, Debug)]
+struct DState {
+    cost: (usize, usize),
+    steps: (usize, usize),
+    position: (String, String),
+    open_valves: Vec<String>,
+}
+
+impl Ord for DState {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.cost
+            .cmp(&other.cost)
+            .then_with(|| other.position.cmp(&self.position))
+    }
+}
+
+impl PartialOrd for DState {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
 #[derive(Clone, Debug)]
 struct Valve {
     name: String,
@@ -42,6 +65,8 @@ fn pressure(graph: &HashMap<String, Valve>, open_valves: &Vec<String>) -> usize 
 }
 
 fn shortest_path(graph: &HashMap<String, Valve>, start: String) -> Option<usize> {
+    let mut max_score = 0;
+
     let mut heap = BinaryHeap::new();
 
     let start_state = State {
@@ -53,8 +78,6 @@ fn shortest_path(graph: &HashMap<String, Valve>, start: String) -> Option<usize>
 
     heap.push(start_state);
 
-    let mut max_score = 0;
-
     while let Some(State {
         cost,
         steps,
@@ -63,7 +86,6 @@ fn shortest_path(graph: &HashMap<String, Valve>, start: String) -> Option<usize>
     }) = heap.pop()
     {
         let pressure: usize = pressure(&graph, &open_valves);
-
         let current_valve = graph.get(&position).unwrap();
 
         if !open_valves.contains(&position) && current_valve.flow_rate > 0 && steps < 30 {
@@ -72,29 +94,29 @@ fn shortest_path(graph: &HashMap<String, Valve>, start: String) -> Option<usize>
 
             let next = State {
                 steps: steps + 1,
-                cost: cost + pressure,
+                cost: cost + current_valve.flow_rate * (29 - steps),
                 position: position.clone(),
                 open_valves: new_open_valves.clone(),
             };
 
             heap.push(next.clone());
         } else {
-            for (next_valve, distance) in current_valve
+            let valve_candidates: Vec<(&Valve, &usize)> = current_valve
                 .connections
                 .iter()
                 .map(|v| (graph.get(v.0).unwrap(), v.1))
-            {
-                if position == next_valve.name
-                    || next_valve.flow_rate == 0
-                    || steps + distance > 30
-                    || open_valves.contains(&next_valve.name)
-                {
-                    continue;
-                }
+                .filter(|(v, d)| {
+                    !(position == v.name
+                        || v.flow_rate == 0
+                        || steps + *d > 30
+                        || open_valves.contains(&v.name))
+                })
+                .collect();
 
+            for (next_valve, distance) in valve_candidates {
                 let next = State {
                     steps: steps + distance,
-                    cost: cost + pressure * distance,
+                    cost: cost,
                     position: next_valve.name.clone(),
                     open_valves: open_valves.clone(),
                 };
@@ -103,10 +125,156 @@ fn shortest_path(graph: &HashMap<String, Valve>, start: String) -> Option<usize>
             }
         }
 
-        let perp_cost = cost + (30 - steps) * pressure;
+        max_score = max_score.max(cost);
+    }
 
-        if perp_cost > max_score {
-            max_score = perp_cost;
+    Some(max_score)
+}
+
+fn shortest_dpath(graph: &HashMap<String, Valve>, start: String) -> Option<usize> {
+    let mut max_score = 0;
+    let mut max_pressure = 0;
+
+    let mut heap = BinaryHeap::new();
+
+    let start_state = DState {
+        cost: (0, 0),
+        steps: (4, 4),
+        position: (start.clone(), start.clone()),
+        open_valves: Vec::new(),
+    };
+
+    heap.push(start_state);
+
+    while let Some(DState {
+        cost,
+        steps,
+        position,
+        open_valves,
+    }) = heap.pop()
+    {
+        let pressure: usize = pressure(&graph, &open_valves);
+
+        let next_states_1 = {
+            let mut next_states = Vec::new();
+            let cost = cost.0;
+            let steps = steps.0;
+            let position = position.0.clone();
+
+            let current_valve = graph.get(&position).unwrap();
+
+            if !open_valves.contains(&position) && current_valve.flow_rate > 0 && steps < 30 {
+                let mut new_open_valves = open_valves.clone();
+                new_open_valves.push(position.clone());
+
+                // println!("{:?} {} {}", open_valves, position, current_valve.flow_rate * (29 - steps));
+
+                let next = State {
+                    steps: steps + 1,
+                    cost: cost + current_valve.flow_rate * (29 - steps),
+                    position: position.clone(),
+                    open_valves: new_open_valves.clone(),
+                };
+
+                next_states.push(next.clone());
+            } else {
+                let valve_candidates: Vec<(&Valve, &usize)> = current_valve
+                    .connections
+                    .iter()
+                    .map(|v| (graph.get(v.0).unwrap(), v.1))
+                    .filter(|(v, d)| {
+                        !(position == v.name
+                            || v.flow_rate == 0
+                            || steps + *d > 30
+                            || open_valves.contains(&v.name))
+                    })
+                    .collect();
+
+                for (next_valve, distance) in valve_candidates {
+                    let next = State {
+                        steps: steps + distance,
+                        cost: cost,
+                        position: next_valve.name.clone(),
+                        open_valves: open_valves.clone(),
+                    };
+
+                    next_states.push(next.clone());
+                }
+            }
+
+            next_states
+        };
+
+        let next_states_2 = {
+            let mut next_states = Vec::new();
+            let cost = cost.1;
+            let steps = steps.1;
+            let position = position.1.clone();
+
+            let current_valve = graph.get(&position).unwrap();
+
+            if !open_valves.contains(&position) && current_valve.flow_rate > 0 && steps < 30 {
+                let mut new_open_valves = open_valves.clone();
+                new_open_valves.push(position.clone());
+
+                // println!("{:?} {} {} / {}", open_valves, position, current_valve.flow_rate * (29 - steps), cost);
+
+                let next = State {
+                    steps: steps + 1,
+                    cost: cost + current_valve.flow_rate * (29 - steps),
+                    position: position.clone(),
+                    open_valves: new_open_valves.clone(),
+                };
+
+                next_states.push(next.clone());
+            } else {
+                let valve_candidates: Vec<(&Valve, &usize)> = current_valve
+                    .connections
+                    .iter()
+                    .map(|v| (graph.get(v.0).unwrap(), v.1))
+                    .filter(|(v, d)| {
+                        !(position == v.name
+                            || v.flow_rate == 0
+                            || steps + *d > 30
+                            || open_valves.contains(&v.name))
+                    })
+                    .collect();
+
+                for (next_valve, distance) in valve_candidates {
+                    let next = State {
+                        steps: steps + distance,
+                        cost: cost,
+                        position: next_valve.name.clone(),
+                        open_valves: open_valves.clone(),
+                    };
+
+                    next_states.push(next.clone());
+                }
+            }
+
+            next_states
+        };
+
+        for state_1 in next_states_1.iter() {
+            for state_2 in next_states_2.iter() {
+                if state_1.position == state_2.position {
+                    continue;
+                } else {
+                    heap.push(DState {
+                        cost: (state_1.cost, state_2.cost),
+                        steps: (state_1.steps, state_2.steps),
+                        position: (state_1.position.clone(), state_2.position.clone()),
+                        open_valves: state_1.open_valves.union(state_2.open_valves.clone()),
+                    });
+                }
+            }
+        }
+
+        if cost.0 + cost.1 > max_score {
+            max_score = cost.0 + cost.1;
+            println!("\n! {}", max_score);
+            println!("{:?} {} {:?}", cost, pressure, open_valves);
+            println!("{:?} {:?}\n", steps, position);
         }
     }
 
@@ -146,8 +314,8 @@ fn main() {
         }
 
         search_distances(&mut graph);
-        println!("P1 {:?}", shortest_path(&graph, "AA".to_string()));
-        // println!("P2 {:?}", shortest_elepath(&graph, "AA".to_string()));
+        // println!("P1 {:?}", shortest_path(&graph, "AA".to_string()));
+        println!("P2 {:?}", shortest_dpath(&graph, "AA".to_string()));
     }
 }
 
