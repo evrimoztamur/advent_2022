@@ -108,8 +108,6 @@ impl ProductionState {
             new_state.wip_geodebots += 1;
 
             choices.push(new_state);
-
-            return choices;
         }
 
         if self.ore >= self.blueprint.obsidianbot_cost_ore
@@ -123,8 +121,6 @@ impl ProductionState {
             new_state.wip_obsidianbots += 1;
 
             choices.push(new_state);
-
-            return choices;
         }
 
         if self.ore >= self.blueprint.claybot_cost_ore && self.claybots < 12 {
@@ -217,25 +213,27 @@ fn main() {
             });
         }
 
-        let mut p1 = 0;
+        // let mut p1 = 0;
 
-        for blueprint in blueprints.iter() {
-            println!("{:?}", blueprint);
-            let production_state = ProductionState::new(*blueprint, DURATION_P1);
-            let geodes = production_state.resolve_p1();
-            p1 += geodes * blueprint.blueprint_id;
-        }
-
-        println!("P1 {}", p1);
-        // let mut p2 = 1;
-
-        // for blueprint in blueprints.iter().take(3) {
+        // for blueprint in blueprints.iter() {
         //     println!("{:?}", blueprint);
-        //     let production_state = ProductionState::new(*blueprint, DURATION_P2);
+        //     let production_state = ProductionState::new(*blueprint, DURATION_P1);
         //     let geodes = production_state.resolve_p1();
-        //     p2 *= geodes;
+        //     p1 += geodes * blueprint.blueprint_id;
         // }
 
-        // println!("P1 {}", p2);
+        // println!("P1 {}", p1);
+
+        
+        let mut p2 = 1;
+
+        for blueprint in blueprints.iter().take(3) {
+            println!("{:?}", blueprint);
+            let production_state = ProductionState::new(*blueprint, DURATION_P2);
+            let geodes = production_state.resolve_p1();
+            p2 *= geodes;
+        }
+
+        println!("P1 {}", p2);
     }
 }
