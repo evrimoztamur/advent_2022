@@ -1,5 +1,5 @@
 fn main() {
-    if let Ok(content) = std::fs::read_to_string("example.txt") {
+    if let Ok(content) = std::fs::read_to_string("input.txt") {
         let mut ring: Box<[(usize, usize, isize)]> = content
             .lines()
             .enumerate()
